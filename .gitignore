@@ -1,0 +1,23 @@
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Entornos virtuales y dependencias
+venv/
+.env
+*.pyc
+__pycache__/
+
+# Configuración de editores
+.vscode/
+.idea/
+
+# Archivos de log y temporales
+*.log
+*.tmp
+# Archivos de salida y compilación
+dist/
+build/
+
+# Scripts ejecutables personales
+script_git.sh
