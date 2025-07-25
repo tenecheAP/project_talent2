@@ -1,0 +1,18 @@
+Local URL: http://localhost:8501
+Network URL: http://192.168.1.7:8501
+
+
+pip install spacy scikit-learn
+Python -m spacy download es
+
+python -m spacy download es_core_news_sm
+
+Python -m spacy download es_core_news_sm
+
+https://tactiq.io/r/transcribing
+
+Mentora Magnolia Cardozo  to  Everyone 8:46 PM
+pip install fastapi pydantic pandas openpyxl uvicorn
+Python -m spacy download es_core_news_sm
+pip install spacy scikit-learn
+Python -m spacy download es_core_news_sm

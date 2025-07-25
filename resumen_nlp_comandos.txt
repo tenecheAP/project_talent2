@@ -1,0 +1,34 @@
+https://docs.google.com/spreadsheets/d/1_RqZjsDaTDaRthU8K5EFiWtbb9RMTQ_QWL3YqYI0JB8/edit?gid=1233092417#gid=1233092417
+
+Resumen de comandos y librerías utilizadas para procesamiento de lenguaje natural en Python
+
+1. Instalación de librerías:
+-------------------------------------------------------------
+Se instalaron las siguientes librerías esenciales para procesamiento de texto:
+
+- spaCy: Biblioteca de NLP de alto rendimiento.
+    Comando: pip install spacy
+
+- scikit-learn: Biblioteca para machine learning (usada para modelos, métricas y preprocesamiento).
+    Comando: pip install scikit-learn
+
+2. Descarga del modelo de lenguaje en español:
+-------------------------------------------------------------
+- Modelo 'es_core_news_sm' de spaCy, que contiene reglas y vectores para el idioma español.
+    Comando: python -m spacy download es_core_news_sm
+
+Nota: El comando se ejecutó dos veces para asegurar la descarga.
+
+3. Error encontrado durante instalación:
+-------------------------------------------------------------
+Al intentar instalar dependencias de spaCy, se presentó un error con la librería `blis`:
+    Error: "Microsoft Visual C++ 14.0 or greater is required..."
+
+Solución propuesta:
+    Instalar el compilador desde: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+Este error es común en sistemas Windows cuando se requiere compilar extensiones en C/C++.
+
+Conclusión:
+-------------------------------------------------------------
+El entorno se está preparando para trabajar con NLP en español. Falta instalar correctamente los Microsoft C++ Build Tools para poder completar la instalación de algunas dependencias de spaCy.
