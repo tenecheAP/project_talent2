@@ -109,7 +109,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-entornoVirtual/
+nuevo_entorno/
 
 # Spyder project settings
 .spyderproject
