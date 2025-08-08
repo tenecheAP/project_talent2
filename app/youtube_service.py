@@ -183,4 +183,18 @@ class YouTubeService:
         Returns:
             URL de embed del video
         """
-        return f"https://www.youtube.com/embed/{video_id}" 
+        return f"https://www.youtube.com/embed/{video_id}"
+    
+    def get_embed_html(self, video_id: str, width: int = 560, height: int = 315) -> str:
+        """
+        Genera el HTML del iframe para embed
+        
+        Args:
+            video_id: ID del video de YouTube
+            width: Ancho del iframe
+            height: Alto del iframe
+        
+        Returns:
+            HTML del iframe
+        """
+        return f'<iframe width="{width}" height="{height}" src="https://www.youtube.com/embed/{video_id}?si=5DQfQXm4_CD13NpV" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>' 

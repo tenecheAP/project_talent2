@@ -114,9 +114,50 @@ with tab1:
                             with col2:
                                 # Mostrar trailer si está disponible
                                 if result.trailer:
-                                    st.image(result.trailer.thumbnail_url, caption="Trailer")
+                                    st.write("🎬 **Trailer:**")
+                                    # Mostrar iframe embebido para los primeros 3 resultados
+                                    if i < 3:
+                                        embed_html = f"""
+                                        <iframe width="280" height="157" 
+                                                src="https://www.youtube.com/embed/{result.trailer.video_id}?si=5DQfQXm4_CD13NpV" 
+                                                title="YouTube video player" 
+                                                frameborder="0" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                                referrerpolicy="strict-origin-when-cross-origin" 
+                                                allowfullscreen>
+                                        </iframe>
+                                        """
+                                        st.components.v1.html(embed_html, height=180)
+                                    else:
+                                        # Para los demás resultados, mostrar el trailer por defecto de Avatar
+                                        default_embed_html = """
+                                        <iframe width="280" height="157" 
+                                                src="https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV" 
+                                                title="YouTube video player" 
+                                                frameborder="0" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                                referrerpolicy="strict-origin-when-cross-origin" 
+                                                allowfullscreen>
+                                        </iframe>
+                                        """
+                                        st.components.v1.html(default_embed_html, height=180)
+                                    
                                     st.write(f"**Duración:** {result.trailer.duration}")
                                     st.write(f"**Vistas:** {result.trailer.view_count:,}")
+                                else:
+                                    # Si no hay trailer, mostrar el trailer por defecto de Avatar
+                                    st.write("🎬 **Trailer:**")
+                                    default_embed_html = """
+                                    <iframe width="280" height="157" 
+                                            src="https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV" 
+                                            title="YouTube video player" 
+                                            frameborder="0" 
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                            referrerpolicy="strict-origin-when-cross-origin" 
+                                            allowfullscreen>
+                                    </iframe>
+                                    """
+                                    st.components.v1.html(default_embed_html, height=180)
                                 
                                 # Mostrar análisis de IA si está disponible
                                 if result.analysis:
@@ -172,8 +213,34 @@ with tab2:
                                 st.write(f"**Géneros:** {rec.title.listed_in}")
                         
                         with col2:
-                            if rec.trailer:
-                                st.image(rec.trailer.thumbnail_url, caption="Trailer")
+                            # Mostrar trailer embebido
+                            st.write("🎬 **Trailer:**")
+                            if rec.trailer and i < 3:
+                                # Mostrar trailer real para los primeros 3 resultados
+                                embed_html = f"""
+                                <iframe width="280" height="157" 
+                                        src="https://www.youtube.com/embed/{rec.trailer.video_id}?si=5DQfQXm4_CD13NpV" 
+                                        title="YouTube video player" 
+                                        frameborder="0" 
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                        referrerpolicy="strict-origin-when-cross-origin" 
+                                        allowfullscreen>
+                                </iframe>
+                                """
+                                st.components.v1.html(embed_html, height=180)
+                            else:
+                                # Mostrar trailer por defecto de Avatar
+                                default_embed_html = """
+                                <iframe width="280" height="157" 
+                                        src="https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV" 
+                                        title="YouTube video player" 
+                                        frameborder="0" 
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                        referrerpolicy="strict-origin-when-cross-origin" 
+                                        allowfullscreen>
+                                </iframe>
+                                """
+                                st.components.v1.html(default_embed_html, height=180)
                             
                             if rec.analysis:
                                 st.write("🤖 **Análisis:**")

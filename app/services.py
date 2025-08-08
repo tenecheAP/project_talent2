@@ -45,7 +45,7 @@ class NetflixSearchService:
         
         # Convertir a modelos Pydantic con información multimedia
         netflix_titles_with_media = []
-        for _, row in results.iterrows():
+        for i, (_, row) in enumerate(results.iterrows()):
             # Crear NetflixTitle
             title = NetflixTitle(
                 show_id=row['show_id'],
@@ -62,9 +62,9 @@ class NetflixSearchService:
                 description=row['description'] if pd.notna(row['description']) else None
             )
             
-            # Obtener trailer si se solicita
+            # Obtener trailer si se solicita (solo para los primeros 3 resultados)
             trailer = None
-            if request.include_trailers:
+            if request.include_trailers and i < 3:
                 trailer = self.youtube_service.search_trailer(
                     title.title, title.release_year
                 )
