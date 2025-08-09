@@ -36,6 +36,7 @@ class ContentAnalysis(BaseModel):
     content_warnings: List[str]
     recommendation_score: float
     similar_titles: List[str]
+    critique: Optional[str] = None
 
 class NetflixTitleWithMedia(BaseModel):
     """Título de Netflix con información multimedia"""
@@ -50,6 +51,8 @@ class SearchRequest(BaseModel):
     limit: int = 10
     include_trailers: bool = False
     include_analysis: bool = False
+    # Búsqueda inteligente con IA (opcional)
+    smart_query: bool = False
 
 class SearchResponse(BaseModel):
     """Modelo para las respuestas de búsqueda"""

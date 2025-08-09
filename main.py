@@ -5,6 +5,15 @@ from app.services import NetflixSearchService
 from app.models import SearchRequest, UserPreferences, RecommendationRequest
 from app.constants import columnas_busqueda
 
+# Utilidad para mostrar calificación con estrellas (0-5)
+def render_star_rating(score: float, max_stars: int = 5) -> str:
+    try:
+        clamped = max(0.0, min(1.0, float(score)))
+    except Exception:
+        clamped = 0.0
+    filled = int(round(clamped * max_stars))
+    return "⭐" * filled + "☆" * (max_stars - filled)
+
 # Configurar página
 st.set_page_config(
     page_title="Netflix Titles Search",
@@ -36,6 +45,8 @@ with st.sidebar:
     # Opciones de búsqueda
     include_trailers = st.checkbox("🎥 Incluir trailers de YouTube", value=False)
     include_analysis = st.checkbox("🤖 Incluir análisis de IA", value=True)
+    smart_query_sidebar = st.checkbox("🧠 Activar búsqueda inteligente con IA (Groq)", value=True,
+        help="Reescribe tu consulta en español, corrige errores y busca con mayor precisión")
     
     # Configuración de recomendaciones
     st.header("📊 Recomendaciones")
@@ -51,6 +62,32 @@ with st.sidebar:
         max_value=2024,
         value=(2020, 2024)
     )
+
+    st.header("🧹 Trailers en CSV")
+    max_to_update = st.number_input(
+        "Máximo a actualizar en esta ejecución",
+        min_value=1,
+        max_value=200,
+        value=20,
+        step=1,
+        help="Buscar y guardar trailers faltantes en la columna trailer_url del CSV"
+    )
+    if st.button("🔄 Actualizar/forzar búsqueda de trailers", type="secondary"):
+        with st.spinner("Buscando y guardando trailers faltantes en el CSV..."):
+            try:
+                summary = search_service.fill_trailer_urls(int(max_to_update))
+                if summary.get('updated', 0) > 0:
+                    st.success(
+                        f"✅ Trailers actualizados: {summary['updated']} | Fallidos: {summary['failed']} | "
+                        f"Faltantes antes: {summary['total_missing_before']} → después: {summary.get('total_missing_after', 'N/A')}"
+                    )
+                else:
+                    msg = summary.get('message') or "No se actualizaron trailers"
+                    st.info(
+                        f"ℹ️ {msg}. Faltantes: {summary.get('total_missing_before', 'N/A')}"
+                    )
+            except Exception as e:
+                st.error(f"❌ Error al completar trailers: {str(e)}")
 
 # Pestañas principales
 tab1, tab2, tab3 = st.tabs(["🔍 Búsqueda", "📊 Recomendaciones", "📈 Estadísticas"])
@@ -71,6 +108,126 @@ with tab1:
         )
     
     limit = st.slider("Número de resultados:", min_value=5, max_value=50, value=10)
+
+    st.markdown("---")
+    st.subheader("🧠 Búsqueda con IA (Groq)")
+    col_g1, col_g2 = st.columns([2, 1])
+    with col_g1:
+        ai_query = st.text_input("Describe lo que buscas (en español, con errores si hace falta):", placeholder="Quiero algo de balando con tom kruz de accion")
+    with col_g2:
+        analyze_limit = st.slider("Títulos a analizar (0-20)", min_value=0, max_value=20, value=10)
+    smart_mode = st.checkbox("Usar búsqueda inteligente con IA (corrección agresiva)", value=True)
+    confirm_interpretation = st.checkbox("Pedir confirmación de la consulta interpretada", value=True)
+    
+    if st.button("🧠 Buscar con IA", type="primary"):
+        if ai_query:
+            with st.spinner("Interpretando tu consulta con IA y buscando títulos..."):
+                try:
+                    # Primero ejecutamos una búsqueda normal pero con smart_query activado
+                    request = SearchRequest(
+                        query=ai_query,
+                        search_type="all",
+                        limit=limit,
+                        include_trailers=include_trailers,
+                        include_analysis=include_analysis,
+                        smart_query=smart_query_sidebar or smart_mode
+                    )
+                    results = search_service.search_titles(request)
+
+                    # Si se solicitó confirmación, volver a pedir interpretación explícita con Groq (si disponible)
+                    interpreted_query_text = None
+                    if confirm_interpretation and hasattr(search_service.ai_service, 'groq_client') and search_service.ai_service.groq_client:
+                        try:
+                            prompt = (
+                                "Usuario en español describe búsqueda. Devuelve SOLO JSON: {normalized_query_es, notas_es}. "
+                                f"Consulta: {ai_query}"
+                            )
+                            comp = search_service.ai_service.groq_client.chat.completions.create(
+                                model="llama-3.1-8b-instant",
+                                messages=[
+                                    {"role": "system", "content": "Eres un asistente que devuelve JSON válido."},
+                                    {"role": "user", "content": prompt}
+                                ],
+                                temperature=0.2,
+                                max_tokens=160,
+                            )
+                            import json
+                            data = json.loads(comp.choices[0].message.content)
+                            interpreted_query_text = data.get('normalized_query_es')
+                        except Exception:
+                            interpreted_query_text = None
+
+                    if interpreted_query_text:
+                        st.info(f"Consulta interpretada: {interpreted_query_text}")
+                        if st.button("🔁 Reinterpretar con IA"):
+                            st.experimental_rerun()
+
+                    st.success(f"✅ Encontrados {results.total_count} resultados (IA)")
+                    # Mostrar resultados (idéntico a la búsqueda normal)
+                    for i, result in enumerate(results.results[:analyze_limit or len(results.results)]):
+                        with st.expander(f"🎬 {result.title.title}", expanded=i < 3):
+                            col1b, col2b = st.columns([2, 1])
+                            with col1b:
+                                st.write(f"**Título:** {result.title.title}")
+                                st.write(f"**Tipo:** {result.title.type}")
+                                if result.title.director:
+                                    st.write(f"**Director:** {result.title.director}")
+                                if result.title.release_year:
+                                    st.write(f"**Año:** {result.title.release_year}")
+                                if result.analysis and hasattr(result.analysis, 'recommendation_score'):
+                                    st.write(
+                                        f"**Calificación:** {render_star_rating(result.analysis.recommendation_score)} "
+                                        f"({result.analysis.recommendation_score * 5:.1f}/5)"
+                                    )
+                                if result.title.listed_in:
+                                    st.write(f"**Géneros:** {result.title.listed_in}")
+                                if result.title.description:
+                                    st.write(f"**Descripción:** {result.title.description}")
+                            with col2b:
+                                st.write("🎬 **Trailer:**")
+                                if result.trailer:
+                                    embed_html = f"""
+                                    <iframe width=\"280\" height=\"157\" 
+                                            src=\"https://www.youtube.com/embed/{result.trailer.video_id}?si=5DQfQXm4_CD13NpV\" 
+                                            title=\"YouTube video player\" 
+                                            frameborder=\"0\" 
+                                            allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" 
+                                            referrerpolicy=\"strict-origin-when-cross-origin\" 
+                                            allowfullscreen>
+                                    </iframe>
+                                    """
+                                    st.components.v1.html(embed_html, height=180)
+                                else:
+                                    default_embed_html = """
+                                    <iframe width=\"280\" height=\"157\" 
+                                            src=\"https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV\" 
+                                            title=\"YouTube video player\" 
+                                            frameborder=\"0\" 
+                                            allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" 
+                                            referrerpolicy=\"strict-origin-when-cross-origin\" 
+                                            allowfullscreen>
+                                    </iframe>
+                                    """
+                                    st.components.v1.html(default_embed_html, height=180)
+                                if result.analysis:
+                                    st.write("🤖 **Análisis de IA:**")
+                                    st.write(f"**Sentimiento:** {result.analysis.sentiment_score:.2f}")
+                                    if result.analysis.genre_prediction:
+                                        st.write(f"**Géneros predichos:** {', '.join(result.analysis.genre_prediction)}")
+                                    st.write(f"**Audiencia:** {result.analysis.target_audience}")
+                                    if result.analysis.content_warnings:
+                                        st.write(f"**Advertencias:** {', '.join(result.analysis.content_warnings)}")
+                                    st.write(
+                                        f"**Calificación (IA):** {render_star_rating(result.analysis.recommendation_score)} "
+                                        f"({result.analysis.recommendation_score * 5:.1f}/5)"
+                                    )
+                                    # Crítica corta (ocultable)
+                                    if getattr(result.analysis, 'critique', None):
+                                        with st.expander("📝 Ver crítica corta (IA)", expanded=False):
+                                            st.write(result.analysis.critique)
+                            st.markdown("---")
+                except Exception as e:
+                    st.error(f"❌ Error en la búsqueda con IA: {str(e)}")
     
     if st.button("🔍 Buscar", type="primary"):
         if query:
@@ -104,6 +261,12 @@ with tab1:
                                     st.write(f"**País:** {result.title.country}")
                                 if result.title.release_year:
                                     st.write(f"**Año:** {result.title.release_year}")
+                                # Calificación en estrellas basada en recommendation_score si hay análisis
+                                if result.analysis and hasattr(result.analysis, 'recommendation_score'):
+                                    st.write(
+                                        f"**Calificación:** {render_star_rating(result.analysis.recommendation_score)} "
+                                        f"({result.analysis.recommendation_score * 5:.1f}/5)"
+                                    )
                                 if result.title.rating:
                                     st.write(f"**Rating:** {result.title.rating}")
                                 if result.title.listed_in:
@@ -115,21 +278,27 @@ with tab1:
                                 # Mostrar trailer si está disponible
                                 if result.trailer:
                                     st.write("🎬 **Trailer:**")
-                                    # Mostrar iframe embebido para los primeros 3 resultados
-                                    if i < 3:
-                                        embed_html = f"""
-                                        <iframe width="280" height="157" 
-                                                src="https://www.youtube.com/embed/{result.trailer.video_id}?si=5DQfQXm4_CD13NpV" 
-                                                title="YouTube video player" 
-                                                frameborder="0" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                                referrerpolicy="strict-origin-when-cross-origin" 
-                                                allowfullscreen>
-                                        </iframe>
-                                        """
-                                        st.components.v1.html(embed_html, height=180)
-                                    else:
-                                        # Para los demás resultados, mostrar el trailer por defecto de Avatar
+                                    embed_html = f"""
+                                    <iframe width="280" height="157" 
+                                            src="https://www.youtube.com/embed/{result.trailer.video_id}?si=5DQfQXm4_CD13NpV" 
+                                            title="YouTube video player" 
+                                            frameborder="0" 
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                            referrerpolicy="strict-origin-when-cross-origin" 
+                                            allowfullscreen>
+                                    </iframe>
+                                    """
+                                    st.components.v1.html(embed_html, height=180)
+                                    if getattr(result.trailer, 'duration', None):
+                                        st.write(f"**Duración:** {result.trailer.duration}")
+                                    if getattr(result.trailer, 'view_count', None) is not None:
+                                        st.write(f"**Vistas:** {result.trailer.view_count:,}")
+                                else:
+                                    # Si no hay objeto trailer, intentar usar 'trailer_url' del dataset si existe
+                                    if hasattr(result, 'title') and hasattr(result.title, 'title'):
+                                        # No tenemos acceso directo a la fila aquí; el servicio llena el objeto trailer si puede
+                                        # Por lo tanto, si no hay trailer, mostramos el por defecto
+                                        st.write("🎬 **Trailer:**")
                                         default_embed_html = """
                                         <iframe width="280" height="157" 
                                                 src="https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV" 
@@ -141,23 +310,6 @@ with tab1:
                                         </iframe>
                                         """
                                         st.components.v1.html(default_embed_html, height=180)
-                                    
-                                    st.write(f"**Duración:** {result.trailer.duration}")
-                                    st.write(f"**Vistas:** {result.trailer.view_count:,}")
-                                else:
-                                    # Si no hay trailer, mostrar el trailer por defecto de Avatar
-                                    st.write("🎬 **Trailer:**")
-                                    default_embed_html = """
-                                    <iframe width="280" height="157" 
-                                            src="https://www.youtube.com/embed/nb_fFj_0rq8?si=5DQfQXm4_CD13NpV" 
-                                            title="YouTube video player" 
-                                            frameborder="0" 
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                            referrerpolicy="strict-origin-when-cross-origin" 
-                                            allowfullscreen>
-                                    </iframe>
-                                    """
-                                    st.components.v1.html(default_embed_html, height=180)
                                 
                                 # Mostrar análisis de IA si está disponible
                                 if result.analysis:
@@ -168,7 +320,10 @@ with tab1:
                                     st.write(f"**Audiencia:** {result.analysis.target_audience}")
                                     if result.analysis.content_warnings:
                                         st.write(f"**Advertencias:** {', '.join(result.analysis.content_warnings)}")
-                                    st.write(f"**Score recomendación:** {result.analysis.recommendation_score:.2f}")
+                                    st.write(
+                                        f"**Calificación (IA):** {render_star_rating(result.analysis.recommendation_score)} "
+                                        f"({result.analysis.recommendation_score * 5:.1f}/5)"
+                                    )
                             
                             st.markdown("---")
                 except Exception as e:
@@ -199,7 +354,10 @@ with tab2:
                 st.success(f"✅ {recommendations.total_count} recomendaciones generadas")
                 
                 for i, rec in enumerate(recommendations.recommendations):
-                    with st.expander(f"🎬 {rec.title.title} (Score: {rec.analysis.recommendation_score:.2f})", expanded=i < 3):
+                    header_suffix = ""
+                    if rec.analysis:
+                        header_suffix = f" — Calificación: {render_star_rating(rec.analysis.recommendation_score)} ({rec.analysis.recommendation_score * 5:.1f}/5)"
+                    with st.expander(f"🎬 {rec.title.title}{header_suffix}", expanded=i < 3):
                         col1, col2 = st.columns([2, 1])
                         
                         with col1:
@@ -209,14 +367,18 @@ with tab2:
                                 st.write(f"**Director:** {rec.title.director}")
                             if rec.title.release_year:
                                 st.write(f"**Año:** {rec.title.release_year}")
+                            if rec.analysis:
+                                st.write(
+                                    f"**Calificación:** {render_star_rating(rec.analysis.recommendation_score)} "
+                                    f"({rec.analysis.recommendation_score * 5:.1f}/5)"
+                                )
                             if rec.title.listed_in:
                                 st.write(f"**Géneros:** {rec.title.listed_in}")
                         
                         with col2:
                             # Mostrar trailer embebido
                             st.write("🎬 **Trailer:**")
-                            if rec.trailer and i < 3:
-                                # Mostrar trailer real para los primeros 3 resultados
+                            if rec.trailer:
                                 embed_html = f"""
                                 <iframe width="280" height="157" 
                                         src="https://www.youtube.com/embed/{rec.trailer.video_id}?si=5DQfQXm4_CD13NpV" 
@@ -248,6 +410,9 @@ with tab2:
                                 if rec.analysis.genre_prediction:
                                     st.write(f"**Géneros:** {', '.join(rec.analysis.genre_prediction)}")
                                 st.write(f"**Audiencia:** {rec.analysis.target_audience}")
+                                if getattr(rec.analysis, 'critique', None):
+                                    with st.expander("📝 Ver crítica corta (IA)", expanded=False):
+                                        st.write(rec.analysis.critique)
                         
                         st.markdown("---")
             except Exception as e:

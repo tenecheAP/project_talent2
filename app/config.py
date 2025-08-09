@@ -1,6 +1,9 @@
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 
+# Cargar variables de entorno desde .env
+load_dotenv()
 # Configuración de rutas
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -48,6 +51,8 @@ CACHE_TTL = 300  # 5 minutos en segundos
 
 # Configuración de APIs
 CLAVE_API_YOUTUBE = os.getenv("YOUTUBE_API_KEY", "AIzaSyDmWxGseVwbGliWZRRgPZH3npmTRZVIu6g")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 # Configuración de IA
 AI_ENABLED = True

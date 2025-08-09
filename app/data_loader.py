@@ -30,6 +30,17 @@ class DataLoader:
                 sep=CSV_SEPARATOR
             )
             
+            # Asegurar columna para URL de trailer
+            if 'trailer_url' not in self.df.columns:
+                self.df['trailer_url'] = ''
+                logger.info("Columna 'trailer_url' agregada al DataFrame")
+
+            # Columnas para resultados de IA (Groq)
+            for col in ['sentiment_llm', 'score_llm', 'critique_llm']:
+                if col not in self.df.columns:
+                    self.df[col] = '' if col == 'critique_llm' else None
+                    logger.info(f"Columna '{col}' agregada al DataFrame")
+
             # Limpiar datos
             self._clean_data()
             
@@ -110,6 +121,16 @@ class DataLoader:
         
         mask = (self.df['release_year'] >= start_year) & (self.df['release_year'] <= end_year)
         return self.df[mask]
+
+    def save_data(self) -> None:
+        """Guarda el DataFrame actual al CSV de origen"""
+        if self.df is None:
+            return
+        try:
+            self.df.to_csv(self.file_path, index=False, encoding=CSV_ENCODING, sep=CSV_SEPARATOR)
+            logger.info("Datos guardados con éxito en el CSV")
+        except Exception as e:
+            logger.error(f"Error al guardar datos en CSV: {str(e)}")
 
 # Función legacy para compatibilidad
 def cargar_datos_csv(path: str = "data/netflix_titles.csv") -> pd.DataFrame:

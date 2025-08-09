@@ -3,6 +3,12 @@ from typing import List, Dict, Any, Optional, Tuple
 import re
 from .models import NetflixTitle, ContentAnalysis
 from .constants import GENEROS_POPULARES, CLASIFICACIONES_EDAD
+from .config import GROQ_API_KEY, GROQ_MODEL
+
+try:
+    from groq import Groq
+except Exception:
+    Groq = None
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -22,6 +28,13 @@ class AIService:
         self.genre_keywords = self._load_genre_keywords()
         self.sentiment_keywords = self._load_sentiment_keywords()
         self.content_warnings = self._load_content_warnings()
+        # Cliente Groq opcional
+        self.groq_client = None
+        if GROQ_API_KEY and Groq is not None:
+            try:
+                self.groq_client = Groq(api_key=GROQ_API_KEY)
+            except Exception:
+                self.groq_client = None
     
     def _load_genre_keywords(self) -> Dict[str, List[str]]:
         """Carga palabras clave para clasificación de géneros"""
@@ -65,6 +78,11 @@ class AIService:
             ContentAnalysis con el análisis del contenido
         """
         try:
+            # Si hay Groq disponible, intentar análisis LLM primero
+            if self.groq_client:
+                groq_result = self._analyze_with_groq(title)
+                if groq_result is not None:
+                    return groq_result
             # Combinar texto para análisis
             text_for_analysis = f"{title.title} {title.description or ''} {title.listed_in or ''}"
             text_lower = text_for_analysis.lower()
@@ -108,6 +126,56 @@ class AIService:
                 recommendation_score=0.0,
                 similar_titles=[]
             )
+
+    def _analyze_with_groq(self, title: NetflixTitle) -> Optional[ContentAnalysis]:
+        """Analiza usando Groq LLM y devuelve ContentAnalysis si es posible."""
+        try:
+            if not self.groq_client:
+                return None
+
+            prompt = (
+                "Analiza este título y devuelve JSON con: sentiment (0..1), genres (lista corta), "
+                "audience (texto), warnings (lista de claves), recommendation (0..1), critique_es (frase corta). "
+                "Escribe en español.\n\n"
+                f"Título: {title.title}\n"
+                f"Descripción: {title.description or ''}\n"
+                f"Géneros (dataset): {title.listed_in or ''}\n"
+                f"Año: {title.release_year or ''}\n"
+                f"Rating: {title.rating or ''}\n"
+                "Responde SOLO JSON con estas claves: {sentiment, genres, audience, warnings, recommendation, critique_es}."
+            )
+
+            completion = self.groq_client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": "Eres un asistente que devuelve JSON válido."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=256,
+            )
+            content = completion.choices[0].message.content
+            import json
+            data = json.loads(content)
+
+            sentiment = float(max(0.0, min(1.0, data.get("sentiment", 0.5))))
+            genres = [str(g) for g in data.get("genres", [])][:3]
+            audience = str(data.get("audience", "General"))
+            warnings = [str(w) for w in data.get("warnings", [])]
+            recommendation = float(max(0.0, min(1.0, data.get("recommendation", sentiment))))
+            critique = str(data.get("critique_es", ""))
+
+            return ContentAnalysis(
+                sentiment_score=sentiment,
+                genre_prediction=genres,
+                target_audience=audience,
+                content_warnings=warnings,
+                recommendation_score=recommendation,
+                similar_titles=[],
+                critique=critique
+            )
+        except Exception:
+            return None
     
     def _analyze_sentiment(self, text: str) -> float:
         """Analiza el sentimiento del texto"""
